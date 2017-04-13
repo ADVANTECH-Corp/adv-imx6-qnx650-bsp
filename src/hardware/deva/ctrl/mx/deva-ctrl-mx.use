@@ -1,0 +1,38 @@
+%C - SSI Sound driver for Freescale i.MX SOC family
+
+This is a DLL of the io-audio system.
+
+command:
+
+   io-audio [-d mx-[variant] [driver_options]] [-o opt[, opt[, opt]]] [v[v]...]]
+
+driver_options:
+
+ssibase        = val       SSI controller index or base address
+tevt           = val       SSI TX DMA event number
+tchn           = val       SSI TX DMA channel type 
+revt           = val       SSI RX DMA event number
+rchn           = val       SSI RX DMA channel type
+rate           = min[:max] SSI audio sample rate
+clk_mode       = [0|1]     SSI MASTER(0) or SLAVE(1) select
+i2c_bus        = val       I2C device used for codec (0,1,2)
+sys_clk        = val       Audio system clock (sys_clk/mclk)
+protocol       = [i2s|pcm] Audio Protocol
+                           (i2s: xclk_pol=0, rclk_pol=1, xfsync_pol=0, bit_delay=1)
+                           (pcm: xclk_pol=1, rclk_pol=1, xfsync_pol=1, bit_delay=0)
+xclk_pol       = [0|1]     Tansmit clk polarity 0=falling edge, 1=rising edge
+rclk_pol       = [0|1]     Receive clk polarity 0=falling edge, 1=rising edge
+xfsync_pol     = [0|1]     Frame Sync polarity 0=active low, 1=active high
+bit_delay      = [0|1]     Delay between frame sync edge and fisrt data bit
+tx_voices      = val       Number of playback channels/voices.
+rx_voices      = val       Number of capture channels/voices
+capture_subchn = val       Number of simultaneous capture streams. (default=1)
+
+mixer          = [info:[mixer option1]:[mixer options2][:[other options]]]
+                 mixer=info to display the details of mixer options
+
+example:
+
+   # Start audio driver on SSI 1 port for MX6 Sabresmart board
+   io-audio -d mx-mx6q-sabresmart ssibase=0x02028000,tevt=29,tchn=1,revt=28,rchn=2,rate=48000,mixer=i2cdev=1:adr0cs=0:mclk=16500000
+

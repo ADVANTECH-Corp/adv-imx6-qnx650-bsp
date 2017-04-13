@@ -1,0 +1,32 @@
+TARGET(elf32-littlearm)
+OUTPUT_FORMAT(elf32-littlearm)
+ENTRY(_start)
+MEMORY
+{
+	stack 	:	ORIGIN = 0x90C000,	LENGTH = 0x1000
+	rom		:	ORIGIN = 0x907000,	LENGTH = 0x5000
+}
+
+SECTIONS
+{
+	.text : {
+		        image_header.o	(.text.imageheader)
+				*(.text)
+				*(.rodata*)
+			} > rom
+
+    . = ALIGN(4);
+	_etext = .;
+
+	.data : {	*(.data)
+				*(.sdata)
+			} > rom
+
+    . = ALIGN(4);
+	_ecopy = .;
+
+	.bss  : {
+				*(.bss)
+				*(.sbss)
+			} > rom
+}

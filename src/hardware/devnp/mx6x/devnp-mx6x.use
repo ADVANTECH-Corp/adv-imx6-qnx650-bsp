@@ -1,0 +1,27 @@
+%C Driver for Freescale i.MX 6x ENET
+
+Syntax:
+  io-pkt-vX -d mx6x mac=XXXXXXXXXXXX [option[,option ...]] ... &
+
+Options (to override autodetected defaults):
+  duplex=0|1          Half (0) or full (1) duplex mode.  Default auto-detect.
+                      Also can use ifconfig -m and ifconfig enX media to set.
+  kermask=0|1         (1) Use kernel interrupt masking methodology 
+                      (0) manually mask the nic in the interrupt handler
+  mac=XXXXXXXXXXXX    MAC address of the controller.  Used when the syspage
+                      option is NOT used.    
+  receive=X           Set number of receive descriptors. Default 512.
+  speed=10|100	      Media data rate.  Default auto-detect.  Also can
+                      use ifconfig -m and ifconfig enX media to set.
+  syspage             Read hardware parameters (IRQs, MAC, base register 
+                      address and PHY address) for all devices from system
+                      page.  If this option is NOT used, you must use the
+                      mac=X option.
+  transmit=X          Set number of transmit descriptors. Default 1024.
+  verbose=X           Bigger X value yields increased diagnostic output.
+
+Examples:
+  # Start v4 TCP/IP io-pkt using the mx51 driver:
+  io-pkt-v4-hc -d mx6x mac=00123456789a
+  ifconfig en0 10.184
+

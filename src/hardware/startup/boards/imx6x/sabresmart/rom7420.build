@@ -1,0 +1,599 @@
+###################################################################################
+## Neutrino trunk on the Freescale i.MX6Q Sabre-Smart Board, based on ARM Cortex A9-MPCore Platform
+# source-build v2.37
+# Graphics development	
+####################################################################################
+#
+# On-board devices:
+# ----------------
+#
+# device:   i.MX6Q UARTs 1 (debug) and 3 (GPS)
+#       devc-sermx1 -u 1 -e -F -S -c80000000 0x02020000,58
+#       devc-sermx1 -u 3 -s -E -F -c80000000 0x021EC000,60
+#
+# device:   i.MX6Q I2C
+#       i2c-mx35 -p 0x021A0000 -i68 -c66000000 --u 1
+#       i2c-mx35 -p 0x021A4000 -i69 -c66000000 --u 2
+#       i2c-mx35 -p 0x021A8000 -i70 -c66000000 --u 3
+#
+# device:   i.MX6Q USDHC controller
+#      devb-mmcsd-mx6q-sabresmart mmcsd ioport=0x02198000,irq=56 dos exe=all
+#      devb-mmcsd-mx6q-sabresmart mmcsd ioport=0x02194000,irq=55 dos exe=all
+#
+# device:   i.MX6Q USB 
+#      io-usb -dehci-mx31 ioport=0x02184300,irq=72,ioport=0x02184100,irq=75 
+#
+# device:   Ethernet
+#      io-pkt-v4 -dmx6x
+#
+# device:   watchdog Timer
+#      wdtkick
+#
+# device: i.MX6Q SATA Driver
+#     devb-ahci ahci ioport=0x02200000,irq=71
+############################################################################
+[image=0x10800000]
+[virtual=armle-v7,raw +compress] .bootstrap = {
+	# Watchdog can be enabled using '-W' startup option
+	startup-imx6x-sabresmart -v -W
+	# '-ae' startup option allows for unaligned memory accesses
+	PATH=/proc/boot procnto-smp -ae
+}
+[+script] .script = {
+# Initialise the console
+    procmgr_symlink ../../proc/boot/libc.so.3 /usr/lib/ldqnx.so.2
+    devc-sermx1 -u 1 -e -F -S -c80000000 0x02020000,58
+    waitfor /dev/ser1 4
+    reopen /dev/ser1
+
+    display_msg Welcome to QNX Neutrino 6.5.0 SP1 on the ROM-7420 source-build v2.74
+   
+    slogger &
+
+    # Start some common servers
+    pipe &
+
+    #######################################################################
+    ## WatchDog utility
+    ## If startup is given '-W' parameter then the 'wdtkick' utility MUST
+    ## be uncommented below.
+    #######################################################################
+    display_msg Starting watchdog...
+    wdtkick
+
+    #######################################################################
+    ## UART drivers
+    ## UART 1 (started above) is connected to the USB->RS232 bridge
+    ## UART 2 is unused
+    ## UART 3 is connected to the GPS
+    ## Note, UART 3 is started in RAW mode with no s/w flow control.
+    #######################################################################
+    display_msg Starting UART2 driver (/dev/ser2)...
+    devc-sermx1 -u 2 -s -E -F -c80000000 0x021E8000,59
+    waitfor /dev/ser2 4
+
+    display_msg Starting UART3 driver (/dev/ser3)...
+    devc-sermx1 -u 3 -s -E -F -c80000000 0x021EC000,60
+    waitfor /dev/ser3 4
+
+    display_msg Starting UART4 driver for mircotouch (/dev/ser4)...
+    devc-sermx1 -u 4 -s -E -F -c80000000 0x021F0000,61
+    waitfor /dev/ser4 4
+
+    display_msg Starting UART5 driver (/dev/ser5)...
+    devc-sermx1 -u 5 -s -E -F -c80000000 0x021F4000,62
+    waitfor /dev/ser5 4
+
+    #######################################################################
+    ## I2C driver
+    #######################################################################
+    display_msg Starting I2C1,2,3 driver (/dev/i2c1,2,3)...
+    i2c-mx35 -p 0x021A0000 -i68 -c66000000 --u 1 
+    i2c-mx35 -p 0x021A4000 -i69 -c66000000 --u 2
+    i2c-mx35 -p 0x021A8000 -i70 -c66000000 --u 3
+
+    #######################################################################
+    ## SD memory card driver
+    #######################################################################
+    display_msg Starting SD2 memory card driver...
+    devb-mmcsd-mx6q-sabresmart mmcsd ioport=0x02194000,irq=55 dos exe=all
+    
+    display_msg Starting Emmc Nand Flash driver
+    devb-mmcsd-mx6q-sabresmart cam async,quiet blk rw,cache=2M mmcsd ioport=0x0219c000,irq=57,bs=nocd exe=all disk name=emmc
+    waitfor /dev/emmc0 3 
+    
+    #######################################################################
+    ## PCIe driver
+    ## Note:
+    ## The PCIe driver must start before the SATA driver otherwise neither
+    ## driver operates properly.  This is probaby due to the PCIe driver
+    ## using the same PLL as the SATA controller, and restarting the PLL
+    ## as part of the PCIe initialisation process.
+    #######################################################################
+    display_msg Starting PCIe driver...
+    pci-imx6x
+
+    #######################################################################
+    ## ECSPI driver
+    ## The i.MX6Q Sabre-Lite has one directly accessible SPI based component - a SPI NOR Flash chip.
+    ## Since the SPI NOR driver does not use the QNX SPI framework, there is no need to launch spi-master
+    ## at all for this board.  That said the commands below provide examples of how to launch ECSPI drivers.
+    ## Note that the parameters to spi-master will need to be adjusted depending on the hardware.
+    #######################################################################
+	
+    display_msg Starting SPI drivers...
+    devf-norspi-mx6_sabresmart-ecspi
+    
+    #Starting Enhanced SPI driver ECSPI4 (/dev/spi2)
+    #spi-master -d mx51ecspi base=0x70010000,irq=36
+
+    #Starting Enhanced SPI driver ECSPI5 (/dev/spi1)
+    #spi-master -u2 -d mx51ecspi base=0x83fac000,irq=37
+
+    #######################################################################
+    ## SATA driver
+    #######################################################################
+    display_msg Starting SATA driver...
+    devb-ahci ahci ioport=0x02200000,irq=71 
+     
+    #######################################################################
+    ## USB Host 1 as a USB host controller
+    #######################################################################
+    display_msg Starting USB host1
+    #io-usb -dehci-mx31 ioport=0x02184300,irq=72,ioport=0x02184100,irq=75
+    io-usb -dehci-mx31 ioport=0x02184300,irq=72,phy=0x020ca000,ioport=0x02184100,irq=75,phy=0x020c9000
+    waitfor /dev/io-usb/io-usb 4
+    waitfor /dev/io-usb/devu-ehci-mx31.so 4
+
+    #######################################################################
+    ## USB mouse & keyboard driver
+    ######################################################################
+    # io-hid -d usb &
+    # devi-hid kbd mouse
+
+    #######################################################################
+    ## Networking
+    #######################################################################
+    display_msg Starting Ethernet driver
+    waitfor /dev/fs0 4
+    LD_LIBRARY_PATH=:/lib:/usr/lib:/lib/dll:/proc/boot
+    #io-pkt-v4 -dmx6x mac=00190f170131 -ptcpip stacksize=8192 -v
+    io-pkt-v4 -dmx6x -ptcpip stacksize=8192 -v
+    waitfor /dev/socket
+    #ifconfig fec0 10.0.0.5 netmask 255.255.255.0 &
+    dhcp.client -T 10 -m -i fec0 
+        
+    #######################################################################
+    ## Audio
+    #######################################################################   
+    display_msg Starting Audio driver
+    #rom5420 uses i2c2
+    #io-audio -v -d mx-mx6q-sabresmart sys_clk=1288000,mixer=i2cdev=2:mclk=16500000
+    #rsb4410 & rom7420 uses i2c1
+    io-audio -v -d mx-mx6q-sabresmart sys_clk=1288000,mixer=i2cdev=1:mclk=16500000
+    waitfor /dev/snd 4
+        
+    #######################################################################
+    ## Touchscreen
+    #######################################################################
+    #display_msg Starting Touch driver
+    #/usr/bin/devi-microtouch &
+    #waitfor /dev/devi/touch0 5   
+    
+    #######################################################################
+    ## Screen
+    #######################################################################
+    display_msg Starting Screen
+    GRAPHICS_ROOT=/usr/lib/graphics/iMX6X
+    LD_LIBRARY_PATH=:/lib:/usr/lib:/usr/lib/graphics/iMX6X:/lib/dll:/proc/boot
+    /sbin/screen
+    waitfor /dev/screen 4
+    
+    #/usr/bin/calib-touch    
+
+    devc-pty
+    waitfor /dev/ptyp0 4
+    waitfor /dev/socket 4
+    PATH=$PATH:/usr/bin qconn port=8000
+    inetd &
+
+    # Start the main shell
+    SYSNAME=nto
+    TERM=qansi
+    HOME=/
+    PATH=:/bin:/usr/bin:/sbin:/usr/sbin:/proc/boot
+    #[+session] ksh &
+    [+session] ksh /proc/boot/.console.sh &
+}
+*
+# Redirect console messages
+[type=link] /bin/sh=/proc/boot/ksh
+[type=link] /dev/console=/dev/ser1
+[type=link] /tmp=/dev/shmem
+
+# Programs require the runtime linker (ldqnx.so) to be at a fixed location
+
+# Shared libraries
+libc.so
+libm.so.2
+libc.so.3
+
+###########################################################################
+## C++ lib required for GPU 
+###########################################################################
+libcpp.so.4
+
+###########################################################################
+## uncomment for USB HOST driver
+###########################################################################
+devu-ehci-mx31.so
+#devu-ehci-mx28.so
+libusbdi.so
+devu-ohci.so
+devh-usb.so
+libhiddi.so
+
+###########################################################################
+## uncomment for BLOCK driver
+## substitute cam-xxx.so and fs-xxx.so with the cam drivers and filesystems
+## required
+###########################################################################
+libcam.so
+io-blk.so
+cam-disk.so
+cam-cdrom.so
+fs-qnx6.so
+fs-qnx4.so
+fs-dos.so
+fs-udf.so
+fs-cd.so
+fdisk
+mkdosfs
+
+###########################################################################	 
+## uncomment for SATA driver	 
+###########################################################################	 
+devb-ahci	 
+
+###########################################################################
+## uncomment for NETWORK driver
+###########################################################################
+#devnp-mx6x.so
+[search=../prebuilt/armle-v7/lib/dll] /lib/dll/devnp-mx6x.so=devnp-mx6x.so
+
+lsm-autoip.so
+libsocket.so
+
+###########################################################################
+## uncomment for ECSPI
+###########################################################################
+devf-norspi-mx6_sabresmart-ecspi
+flashctl
+
+## Audio ##################################################################
+/sbin/io-audio=io-audio
+/sbin/wave=wave
+mix_ctl
+libasound.so.2
+deva-ctrl-mx-mx6q-sabresmart.so
+xpstartu.wav
+
+###########################################################################
+## SDMA
+###########################################################################
+libdma-sdma-imx6x.so
+
+###########################################################################
+## uncomment for Screen Core (libraries + config)
+###########################################################################
+/etc/system/config
+[search=../install/armle-v7/etc/system/config] /etc/system/config/scaling.conf=scaling.conf
+##/dll
+[search=../prebuilt/armle-v7/lib/dll] /lib/dll/screen-gc320v0.so=screen-gc320v0.so
+[search=../prebuilt/armle-v7/lib/dll] /lib/dll/screen-gles1.so=screen-gles1.so
+[search=../prebuilt/armle-v7/lib/dll] /lib/dll/screen-gles2.so=screen-gles2.so
+[search=../prebuilt/armle-v7/lib/dll] /lib/dll/screen-sw.so=screen-sw.so
+##/usr/lib
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libEGL.so=libEGL.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libGAL-gc320v0.so=libGAL-gc320v0.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libGLESv1_CL.so=libGLESv1_CL.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libGLESv1_CM.so=libGLESv1_CM.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libGLESv2.so=libGLESv2.so
+#[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libKD.so=libKD.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libOpenVG.so=libOpenVG.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libOpenVGU.so=libOpenVGU.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libscreen.so=libscreen.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libswblit.so=libswblit.so
+[search=../prebuilt/armle-v7/usr/lib] /usr/lib/libWFD.so=libWFD.so
+usr/lib/libdisputil.so.2=libdisputil.so.2
+##/lib
+/lib/libhiddi.so=libhiddi.so
+[search=../prebuilt/armle-v7/lib] /lib/libgestures.so=libgestures.so
+[search=../prebuilt/armle-v7/lib] /lib/libinputevents.so=libinputevents.so
+[search=../prebuilt/armle-v7/lib] /lib/libkalman.so=libkalman.so
+[search=../prebuilt/armle-v7/lib] /lib/libmtouch-calib.so=libmtouch-calib.so
+[search=../prebuilt/armle-v7/lib] /lib/libmtouch-fake.so=libmtouch-fake.so
+[search=../prebuilt/armle-v7/lib] /lib/libmtouch-devi.so=libmtouch-devi.so
+##iMX6 specific
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/csc_gamma.conf=csc_gamma.conf
+#[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/graphics.conf=graphics.conf
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/graphics.conf.rom7420=graphics.conf.rom7420
+[type=link] /usr/lib/graphics/iMX6X/graphics.conf=/usr/lib/graphics/iMX6X/graphics.conf.rom7420
+[type=link] /etc/system/config/graphics.conf=/usr/lib/graphics/iMX6X/graphics.conf.rom7420
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libEGL_viv.so=libEGL_viv.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGalcore-3dvg.so=libGalcore-3dvg.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGalcore-gc355.so=libGalcore-gc355.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGLESv2_viv.so=libGLESv2_viv.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGLES_CL_viv.so=libGLES_CL_viv.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGLES_CM_viv.so=libGLES_CM_viv.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libGLSLC.so=libGLSLC.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libOpenVG_viv.so=libOpenVG_viv.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libwfdcfg-imx6x-hdmi.so=libwfdcfg-imx6x-hdmi.so
+#[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libwfdcfg-imx6x-okaya.so=libwfdcfg-imx6x-okaya.so
+#[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libwfdcfg-imx6x-koe.so=libwfdcfg-imx6x-koe.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libwfdcfg-imx6x-idk.so=libwfdcfg-imx6x-idk.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libimx6xCSCgamma-generic.so=libimx6xCSCgamma-generic.so
+[search=../prebuilt/armle-v7/usr/lib/graphics/iMX6X] /usr/lib/graphics/iMX6X/libWFDimx6x.so=libWFDimx6x.so
+
+# Executables
+[data=c]
+devc-sermx1
+
+###########################################################################
+## uncomment for NETWORK driver
+###########################################################################
+io-pkt-v4
+nicinfo
+ping
+ftp
+fs-nfs3
+fs-cifs
+ifconfig
+dhcp.client
+if_up
+/bin/login=login
+inetd
+telnet
+/usr/sbin/telnetd=telnetd
+
+# inetd configs have .inc extension on host to differentiate from binaries.
+[search=../prebuilt/armle-v7/etc] /etc/inetd.conf=inetd.conf.inc
+[search=../prebuilt/armle-v7/etc] /etc/group=group.inc
+[search=../prebuilt/armle-v7/etc] /etc/passwd=passwd.inc
+
+#for nfs mount scripts
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/nfsmount.sh=nfsmount.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/nfsmount-qt5.sh=nfsmount-qt5.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkinand-qnx.sh=mkinand-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkinand-uboot-qnx.sh=mkinand-uboot-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/mkspi-advboot-qnx.sh=mkspi-advboot-qnx.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/write_mac.sh=write_mac.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/fullload.sh=fullload.sh
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/iperf=iperf
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/zcav=zcav
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/serial-loopback-test=serial-loopback-test
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/devi-microtouch=devi-microtouch
+#[search=../prebuilt/armle-v7/img ] /img/adv_boot.bin=adv_boot.bin
+[search=../prebuilt/armle-v7/img ] /img/adv_boot_1G_micron.bin=adv_boot_1G_micron.bin
+#[search=../prebuilt/armle-v7/img ] /img/u-boot_crc.bin=u-boot_crc.bin
+#[search=../prebuilt/armle-v7/img ] /img/u-boot_crc.bin.crc=u-boot_crc.bin.crc
+                                                                                                                                                                              
+###########################################################################
+## uncomment for PCIe driver
+###########################################################################
+pci-imx6x
+pci
+
+###########################################################################
+## uncomment for SATA driver
+###########################################################################
+devb-ahci
+
+###########################################################################
+## uncomment for REMOTE_DEBUG
+###########################################################################
+devc-pty
+qconn
+/usr/bin/pdebug=pdebug
+
+###########################################################################
+## uncomment for Block driver
+###########################################################################
+devb-mmcsd-mx6q-sabresmart
+
+###########################################################################
+## I2C driver
+###########################################################################
+i2c-mx35
+
+###########################################################################
+## uncomment for debugging
+###########################################################################
+librcheck.so
+librcheck.so.1
+libmudflap.so.0
+libmudflap.so.0.0.0
+libmudflapth.so.0
+libmudflapth.so.0.0.0
+
+###########################################################################
+## uncomment for disk drivers (filesystems support)
+###########################################################################
+/sbin/fdisk=fdisk
+/sbin/mkdosfs=mkdosfs
+/sbin/mkqnx6fs=mkqnx6fs
+/sbin/chkdosfs=chkdosfs
+/sbin/chkqnx6fs=chkqnx6fs
+/sbin/chkfsys=chkfsys
+/usr/bin/fsysinfo=fsysinfo
+
+###########################################################################
+## uncomment for USB HOST driver
+###########################################################################
+io-usb
+io-hid
+devi-hid
+usb
+
+###########################################################################
+## uncomment for Image Loading
+###########################################################################
+# img_codec_bmp.so
+# img_codec_gif.so
+# img_codec_jpg.so
+img_codec_png.so
+# img_codec_sgi.so
+# img_codec_tga.so
+libimg.so.1
+
+/etc/system/config
+[search=../prebuilt/armle-v7/etc/system/config] /etc/system/config/img.conf=img.conf
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/display_png_screen = display_png_screen
+
+#[perms=0644] .start-disk-usb = {
+[perms=0744] .start-disk-usb = {
+
+	echo "USB mass storage started..."
+
+	#set env variables
+	#. /scripts/env.sh
+    	#devb-umass blk noatime,cache=8M,automount=@/proc/boot/automount cam cache,async,quiet,pnp dos exe=all qnx6 sync=optional disk name=sysdisk &
+    	devb-umass blk noatime,cache=8M cam cache,async,quiet,pnp dos exe=all qnx6 sync=optional &
+	waitfor /dev/hd1 5 2>/dev/null
+	waitfor /dev/hd2 5 2>/dev/null
+	waitfor /dev/hd3 5 2>/dev/null
+
+	[ -e /dev/hd0t177 ] && mount -tqnx6 /dev/hd0t177 /mnt/hd0/qnx6t177
+	[ -e /dev/hd0t178 ] && mount -tqnx6 /dev/hd0t178 /mnt/hd0/qnx6t178
+	[ -e /dev/hd0t179 ] && mount -tqnx6 /dev/hd0t179 /mnt/hd0/qnx6t179
+	[ -e /dev/hd0t12  ] && mount -tdos  /dev/hd0t12  /mnt/hd0/dos
+	[ -e /dev/hd0t6   ] && mount -tdos  /dev/hd0t6   /mnt/hd0/dos
+
+	[ -e /dev/hd1t177 ] && mount -tqnx6 /dev/hd1t177 /mnt/hd1/qnx6t177
+	[ -e /dev/hd1t178 ] && mount -tqnx6 /dev/hd1t178 /mnt/hd1/qnx6t178
+	[ -e /dev/hd1t179 ] && mount -tqnx6 /dev/hd1t179 /mnt/hd1/qnx6t179
+	[ -e /dev/hd1t12  ] && mount -tdos  /dev/hd1t12  /mnt/hd1/dos
+	[ -e /dev/hd1t6   ] && mount -tdos  /dev/hd1t6   /mnt/hd1/dos
+
+	[ -e /dev/hd2t177 ] && mount -tqnx6 /dev/hd2t177 /mnt/hd2/qnx6t177
+	[ -e /dev/hd2t178 ] && mount -tqnx6 /dev/hd2t178 /mnt/hd2/qnx6t178
+	[ -e /dev/hd2t179 ] && mount -tqnx6 /dev/hd2t179 /mnt/hd2/qnx6t179
+	[ -e /dev/hd2t12  ] && mount -tdos  /dev/hd2t12  /mnt/hd2/dos
+	[ -e /dev/hd2t6   ] && mount -tdos  /dev/hd2t6   /mnt/hd2/dos
+
+	[ -e /dev/hd3t177 ] && mount -tqnx6 /dev/hd3t177 /mnt/hd3/qnx6t177
+	[ -e /dev/hd3t178 ] && mount -tqnx6 /dev/hd3t178 /mnt/hd3/qnx6t178
+	[ -e /dev/hd3t179 ] && mount -tqnx6 /dev/hd3t179 /mnt/hd3/qnx6t179
+	[ -e /dev/hd3t12  ] && mount -tdos  /dev/hd3t12  /mnt/hd3/dos
+	[ -e /dev/hd3t6   ] && mount -tdos  /dev/hd3t6   /mnt/hd3/dos
+}
+
+}
+
+[perms=0744] .console.sh={
+
+#start disk-usb script
+. /proc/boot/.start-disk-usb
+   ksh -l
+}
+
+
+###########################################################################
+## uncomment for WatchDog utility
+###########################################################################
+wdtkick
+
+###########################################################################
+## uncomment for touch-screen driver
+###########################################################################
+#devi-max11801
+#devi-microtouch
+libgf.so.1
+#[search=../prebuilt/armle-v7/bin perms=+x] /bin/sw-calib-gfi = sw-calib-gfi
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/calib-touch = calib-touch
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/rdtouch = rdtouch
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/pwm = pwm
+
+# Note - calib.localhost contains the calibration values from the 
+# sw-calib-gfi utility for the specific LCD screen used to test
+# this BSP. Use the utility to find new values if required.
+/etc/system/config/calib.localhost = {
+0x0:639x479:-4824064 -70400 4575786176 38208 3312384 -52031640240 -108347321
+}
+
+###########################################################################
+## uncomment for Screen Core (executables)
+###########################################################################
+##/sbin
+[search=../prebuilt/armle-v7/sbin perms=+x] /sbin/screen=screen
+[search=../prebuilt/armle-v7/sbin perms=+x] /sbin/devb-ahci=devb-ahci
+##/bin
+[search=../prebuilt/armle-v7/bin perms=+x] /bin/screeninfo=screeninfo
+##/usr/bin
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/egl-configs=egl-configs
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/events=events
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/gles1-gears=gles1-gears
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/gles2-gears=gles2-gears
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/groups=groups
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/subwin=subwin
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/sw-vsync=sw-vsync
+#[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/vg-bouncingTriangle=vg-bouncingTriangle
+#[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/vg-scaleRotateTranslate=vg-scaleRotateTranslate
+[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/vg-tiger=vg-tiger
+#[search=../prebuilt/armle-v7/usr/bin perms=+x] /usr/bin/yuv-test=yuv-test
+
+#[search=../prebuilt/armle-v7/sbin perms=+x] /sbin/devb-ahci=devb-ahci
+
+###########################################################################
+## uncomment for additional libraries needed for QT5
+###########################################################################
+/usr/lib/libbacktrace.so.1=libbacktrace.so.1
+/usr/lib/libz.so.2=libz.so.2
+
+###########################################################################
+## general commands
+###########################################################################
+cp
+ls
+ldd
+cat
+grep
+sed
+awk
+ksh
+pipe
+pidin
+uname
+slogger
+sloginfo
+slay
+hostname
+more
+waitfor
+mount
+mv
+netstat
+on
+umount
+use
+date
+shutdown
+devb-umass
+chmod
+pci
+rm
+rmdir
+route
+setkey
+sleep
+random
+dd
+mkdir
+top
+find
+chmod
+io-audio
+sync
+###########################################################################
+## END OF BUILD SCRIPT
+###########################################################################

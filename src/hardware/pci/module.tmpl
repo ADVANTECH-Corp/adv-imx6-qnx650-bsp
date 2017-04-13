@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<module name="pci">
+	<type>Element</type>
+	<classification>Driver</classification>
+
+	<source>
+		<location subdirs="false">.</location>
+		<location subdirs="true">public</location>
+		<location subdirs="true">include</location>
+		<!-- require a variant for a hinstall to work -->
+		<location subdirs="true">bios</location>
+	</source>
+	<GroupOwner>hw</GroupOwner>
+
+	<contents>
+		<component id="pci-include">
+			<kind type="header"/>
+			<source>
+				<location basedir="public" subdirs="true" runtime="false">.</location>
+			</source>
+		</component>
+	</contents>
+</module>

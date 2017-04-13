@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<module name="pci">
+  <classification>Driver</classification>
+  <contents>
+    <component id="pci-include" generated=""/>
+  </contents>
+</module>

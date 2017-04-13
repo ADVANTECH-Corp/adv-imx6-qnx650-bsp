@@ -1,0 +1,4 @@
+%C    [-b buses] [-d imx6x [option[,option ...]] [-v]
+Where:
+ -b buses     Number of PCI buses to scan. Default 10
+ -d imx6x    [option[,option ...]]
